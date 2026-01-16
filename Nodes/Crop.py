@@ -1,6 +1,6 @@
 import cv2
 import numpy as np
-from NodeEditor import Node, NodePackage, dpg
+from NodeEditor import Node, NodePackage, dpg, show_region_selector
 
 class Crop(Node):
     def __init__(self):
@@ -26,6 +26,10 @@ class Crop(Node):
         # Full Image button
         self.full_image_btn_id = dpg.generate_uuid()
         self.input_image_shape = None  # Store input image dimensions
+        
+        # Select Region button
+        self.select_region_btn_id = dpg.generate_uuid()
+        self.input_image = None  # Store reference to input image for region selection
 
     def set_full_image(self):
         """Set crop parameters to cover the entire input image."""
@@ -43,6 +47,41 @@ class Crop(Node):
             dpg.set_value(self.height_id, self.height)
             
             self.update()
+
+    def select_region(self):
+        """Open the region selector popup to visually select crop area."""
+        if self.input_image is None:
+            return
+        
+        # Current region parameters
+        params = {
+            'x': self.x,
+            'y': self.y,
+            'width': self.width,
+            'height': self.height
+        }
+        
+        def on_region_confirmed(new_params):
+            """Callback when OK is clicked in the region selector."""
+            self.x = new_params['x']
+            self.y = new_params['y']
+            self.width = new_params['width']
+            self.height = new_params['height']
+            
+            # Update UI controls
+            dpg.set_value(self.x_id, self.x)
+            dpg.set_value(self.y_id, self.y)
+            dpg.set_value(self.width_id, self.width)
+            dpg.set_value(self.height_id, self.height)
+            
+            self.update()
+        
+        # Show region selector popup
+        show_region_selector(
+            image=self.input_image,
+            params=params,
+            on_confirm=on_region_confirmed
+        )
 
     def on_save(self) -> dict:
         return {
@@ -76,9 +115,12 @@ class Crop(Node):
         self.update()
 
     def compose(self):
-        # Full Image button - disabled by default until an image is provided
-        dpg.add_button(label="Full Image", callback=lambda: self.set_full_image(),
-                       tag=self.full_image_btn_id, width=200, enabled=False)
+        # Button row for Full Image and Select Region
+        with dpg.group(horizontal=True):
+            dpg.add_button(label="Full Image", callback=lambda: self.set_full_image(),
+                           tag=self.full_image_btn_id, width=95, enabled=False)
+            dpg.add_button(label="Select Region", callback=lambda: self.select_region(),
+                           tag=self.select_region_btn_id, width=95, enabled=False)
         dpg.add_text("Crop Parameters:")
         dpg.add_input_int(label="X", default_value=self.x,
                          callback=self.update_params, tag=self.x_id, width=185)
@@ -96,16 +138,22 @@ class Crop(Node):
         image = data.image_or_mask
         
         if image is None:
-            # Disable the Full Image button when no image is available
+            # Disable buttons when no image is available
             self.input_image_shape = None
+            self.input_image = None
             if dpg.does_item_exist(self.full_image_btn_id):
                 dpg.configure_item(self.full_image_btn_id, enabled=False)
+            if dpg.does_item_exist(self.select_region_btn_id):
+                dpg.configure_item(self.select_region_btn_id, enabled=False)
             return [NodePackage()]
         
-        # Store image dimensions and enable the Full Image button
+        # Store image and dimensions, enable buttons
         self.input_image_shape = image.shape
+        self.input_image = image.copy()  # Store copy for region selection
         if dpg.does_item_exist(self.full_image_btn_id):
             dpg.configure_item(self.full_image_btn_id, enabled=True)
+        if dpg.does_item_exist(self.select_region_btn_id):
+            dpg.configure_item(self.select_region_btn_id, enabled=True)
             
         # Update aspect ratio based on input image
         if self.maintain_aspect:
