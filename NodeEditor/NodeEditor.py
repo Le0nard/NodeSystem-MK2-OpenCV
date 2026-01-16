@@ -258,10 +258,15 @@ class NodeEditor:
         
     def _delete_selected_node(self):
         self.push_undo_state()
-        selected = dpg.get_selected_nodes(self.node_editor)
-        for node_id in selected:
+        # Delete selected nodes
+        selected_nodes = dpg.get_selected_nodes(self.node_editor)
+        for node_id in selected_nodes:
             self._node_delete_callback(None, None, node_id)
-
+        
+        # Delete selected links
+        selected_links = dpg.get_selected_links(self.node_editor)
+        for link_id in selected_links:
+            self._delink_nodes_callback(None, link_id)
     def _node_duplicate_callback(self, node):
         self.push_undo_state()
         # Duplicate the node
@@ -334,15 +339,23 @@ class NodeEditor:
         node._set_node_pos(mouse_position[0] - 25, mouse_position[1] - 50)
         
     def right_click_cb(self, sender, app_data):
-        # Check if the right click is in a node
+        mouse_pos = dpg.get_mouse_pos(local=False)
+        
+        # Check if right-click is on a node - if so, let DPG handle the popup menu
         for node in self.nodes:
             node_pos = node._node_pos
             node_size = node._node_size
-            mouse_pos = dpg.get_mouse_pos(local=False)
             
             if node_pos[0] < mouse_pos[0] < node_pos[0] + node_size[0] and node_pos[1] < mouse_pos[1] < node_pos[1] + node_size[1]:
+                # Right-clicked on a node - check if it's on a connected attribute
+                link_to_delete = self._find_link_at_attribute(node, mouse_pos)
+                if link_to_delete is not None:
+                    self._delink_nodes_callback(None, link_to_delete)
+                    return
+                # Otherwise let DPG handle native popup
                 return
         
+        # Not on a node - show the right-click menu to add nodes
         mice_pos = dpg.get_mouse_pos(local=False)
         
         # Adjust mouse position by the node editor's position
@@ -352,6 +365,42 @@ class NodeEditor:
         
         dpg.configure_item(self.right_click_menu, show=True)
         dpg.set_item_pos(self.right_click_menu, adjusted_mouse_pos)
+    
+    def _find_link_at_attribute(self, node, mouse_pos):
+        """Find if mouse is near a connected input/output attribute and return the link ID."""
+        node_pos = node._node_pos
+        node_size = node._node_size
+        
+        # Approximate attribute positions (inputs on left, outputs on right)
+        attr_radius = 20  # Hit area around attribute connection point
+        
+        # Check outputs (right side of node)
+        output_x = node_pos[0] + node_size[0]
+        for idx, output in enumerate(node.outputs):
+            if output.connected_nodes:  # Has connections
+                # Approximate Y position based on attribute index
+                output_y = node_pos[1] + 50 + idx * 30
+                
+                if abs(mouse_pos[0] - output_x) < attr_radius and abs(mouse_pos[1] - output_y) < attr_radius:
+                    # Find the link connected to this output
+                    for link_id, start_attr, end_attr in self.node_links:
+                        if start_attr == output.id:
+                            return link_id
+        
+        # Check inputs (left side of node)
+        input_x = node_pos[0]
+        for idx, input_ in enumerate(node.inputs):
+            if input_.connected_node is not None:  # Has connection
+                # Approximate Y position based on attribute index
+                input_y = node_pos[1] + 50 + idx * 30
+                
+                if abs(mouse_pos[0] - input_x) < attr_radius and abs(mouse_pos[1] - input_y) < attr_radius:
+                    # Find the link connected to this input
+                    for link_id, start_attr, end_attr in self.node_links:
+                        if end_attr == input_.id:
+                            return link_id
+        
+        return None
         
     def left_click_cb(self, sender, app_data):
         if not dpg.get_item_state(self.right_click_menu).get("visible", False):
@@ -596,6 +645,13 @@ class NodeEditor:
         for node in source_nodes:
             node.force_update()
 
+    def _pan_view(self, delta_x: float, delta_y: float):
+        """Pan the view by moving all nodes by the given delta."""
+        for node in self.nodes:
+            current_pos = node._node_pos
+            new_x = current_pos[0] + delta_x
+            new_y = current_pos[1] + delta_y
+            node._set_node_pos(new_x, new_y)
     def start(self):
         self._setup_menu()
         
@@ -616,7 +672,11 @@ class NodeEditor:
                 callback=lambda: self.redo() if dpg.is_key_down(dpg.mvKey_LControl) else None
             )
             
-            
+            # Arrow key navigation for panning
+            dpg.add_key_press_handler(key=dpg.mvKey_Left, callback=lambda: self._pan_view(50, 0))
+            dpg.add_key_press_handler(key=dpg.mvKey_Right, callback=lambda: self._pan_view(-50, 0))
+            dpg.add_key_press_handler(key=dpg.mvKey_Up, callback=lambda: self._pan_view(0, 50))
+            dpg.add_key_press_handler(key=dpg.mvKey_Down, callback=lambda: self._pan_view(0, -50))            
         with dpg.window(label="Right click window", modal=False, show=False, tag=self.right_click_menu, no_title_bar=True):
             # Add the nodes to the right click menu
             for catagory, nodes in self._menu_node_setup.items():

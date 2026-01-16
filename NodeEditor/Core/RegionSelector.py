@@ -263,11 +263,9 @@ class RegionSelector:
         return rel_x, rel_y
     
     def _get_resize_handle_at(self, rel_x: float, rel_y: float) -> Optional[str]:
-        """Check if mouse is over a resize handle or edge and return which one."""
-        # Much larger hit area for handles - easier to click
-        corner_handle_size = 25
-        edge_handle_size = 20
-        border_tolerance = 8  # Distance from border edge to trigger resize
+        """Check if mouse is over a resize handle and return which one."""
+        # Hit area around the square handles only - not the entire border
+        handle_hit_size = 12  # Slightly larger than visual handle size for easier clicking
         
         # Scaled region coordinates
         x1 = int(self._region_x * self._display_scale)
@@ -277,59 +275,36 @@ class RegionSelector:
         mid_x = (x1 + x2) // 2
         mid_y = (y1 + y2) // 2
         
-        # Check corners first (highest priority) - very large hit area
-        if abs(rel_x - x1) < corner_handle_size and abs(rel_y - y1) < corner_handle_size:
+        # Check corners (highest priority)
+        if abs(rel_x - x1) < handle_hit_size and abs(rel_y - y1) < handle_hit_size:
             return 'tl'
-        if abs(rel_x - x2) < corner_handle_size and abs(rel_y - y1) < corner_handle_size:
+        if abs(rel_x - x2) < handle_hit_size and abs(rel_y - y1) < handle_hit_size:
             return 'tr'
-        if abs(rel_x - x1) < corner_handle_size and abs(rel_y - y2) < corner_handle_size:
+        if abs(rel_x - x1) < handle_hit_size and abs(rel_y - y2) < handle_hit_size:
             return 'bl'
-        if abs(rel_x - x2) < corner_handle_size and abs(rel_y - y2) < corner_handle_size:
+        if abs(rel_x - x2) < handle_hit_size and abs(rel_y - y2) < handle_hit_size:
             return 'br'
         
         # Check edge center handles
-        if abs(rel_x - mid_x) < edge_handle_size and abs(rel_y - y1) < edge_handle_size:
+        if abs(rel_x - mid_x) < handle_hit_size and abs(rel_y - y1) < handle_hit_size:
             return 't'
-        if abs(rel_x - mid_x) < edge_handle_size and abs(rel_y - y2) < edge_handle_size:
+        if abs(rel_x - mid_x) < handle_hit_size and abs(rel_y - y2) < handle_hit_size:
             return 'b'
-        if abs(rel_x - x1) < edge_handle_size and abs(rel_y - mid_y) < edge_handle_size:
+        if abs(rel_x - x1) < handle_hit_size and abs(rel_y - mid_y) < handle_hit_size:
             return 'l'
-        if abs(rel_x - x2) < edge_handle_size and abs(rel_y - mid_y) < edge_handle_size:
-            return 'r'
-        
-        # Check entire edges (anywhere along the border can be used to resize)
-        # This makes resizing much easier as the user can drag any part of the edge
-        is_near_left = abs(rel_x - x1) < border_tolerance
-        is_near_right = abs(rel_x - x2) < border_tolerance
-        is_near_top = abs(rel_y - y1) < border_tolerance
-        is_near_bottom = abs(rel_y - y2) < border_tolerance
-        is_within_x = x1 - border_tolerance < rel_x < x2 + border_tolerance
-        is_within_y = y1 - border_tolerance < rel_y < y2 + border_tolerance
-        
-        # Detect edge resizing
-        if is_near_top and is_within_x:
-            return 't'
-        if is_near_bottom and is_within_x:
-            return 'b'
-        if is_near_left and is_within_y:
-            return 'l'
-        if is_near_right and is_within_y:
+        if abs(rel_x - x2) < handle_hit_size and abs(rel_y - mid_y) < handle_hit_size:
             return 'r'
         
         return None
     
     def _is_inside_region(self, rel_x: float, rel_y: float) -> bool:
-        """Check if mouse is inside the region (excluding the border area)."""
-        border_tolerance = 8  # Same as above to create an "inner" region
-        
+        """Check if mouse is inside the region."""
         x1 = int(self._region_x * self._display_scale)
         y1 = int(self._region_y * self._display_scale)
         x2 = int((self._region_x + self._region_width) * self._display_scale)
         y2 = int((self._region_y + self._region_height) * self._display_scale)
         
-        # Only consider as "inside" if we're away from all borders
-        return (x1 + border_tolerance) < rel_x < (x2 - border_tolerance) and \
-               (y1 + border_tolerance) < rel_y < (y2 - border_tolerance)
+        return x1 < rel_x < x2 and y1 < rel_y < y2
     
     def _on_mouse_click(self, sender, app_data):
         """Handle mouse click for starting drag or resize."""
