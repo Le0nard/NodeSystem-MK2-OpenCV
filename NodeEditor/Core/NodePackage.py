@@ -3,12 +3,39 @@ from cv2.typing import MatLike
 from cv2 import Mat
 import cv2
 import numpy as np
+from typing import Optional
 
 from dataclasses import dataclass, field
+
+
+@dataclass
+class Region:
+    """Represents a rectangular region with position and dimensions."""
+    x: int = 0
+    y: int = 0
+    width: int = 100
+    height: int = 100
+    
+    def to_dict(self) -> dict:
+        return {'x': self.x, 'y': self.y, 'width': self.width, 'height': self.height}
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> 'Region':
+        return cls(
+            x=data.get('x', 0),
+            y=data.get('y', 0),
+            width=data.get('width', 100),
+            height=data.get('height', 100)
+        )
+    
+    def copy(self) -> 'Region':
+        return Region(x=self.x, y=self.y, width=self.width, height=self.height)
+
 
 @dataclass
 class NodePackage:
     image_or_mask: MatLike = field(default_factory=lambda: Mat(np.zeros((1, 1, 3), dtype=np.uint8)))
+    region: Optional[Region] = None
     
     def copy(self) -> 'NodePackage':
         new_package = NodePackage()
