@@ -22,6 +22,27 @@ class Crop(Node):
         self.height = 100
         self.maintain_aspect = True
         self.aspect_ratio = 1.0
+        
+        # Full Image button
+        self.full_image_btn_id = dpg.generate_uuid()
+        self.input_image_shape = None  # Store input image dimensions
+
+    def set_full_image(self):
+        """Set crop parameters to cover the entire input image."""
+        if self.input_image_shape is not None:
+            img_height, img_width = self.input_image_shape[:2]
+            self.x = 0
+            self.y = 0
+            self.width = img_width
+            self.height = img_height
+            
+            # Update UI controls
+            dpg.set_value(self.x_id, self.x)
+            dpg.set_value(self.y_id, self.y)
+            dpg.set_value(self.width_id, self.width)
+            dpg.set_value(self.height_id, self.height)
+            
+            self.update()
 
     def on_save(self) -> dict:
         return {
@@ -55,6 +76,9 @@ class Crop(Node):
         self.update()
 
     def compose(self):
+        # Full Image button - disabled by default until an image is provided
+        dpg.add_button(label="Full Image", callback=lambda: self.set_full_image(),
+                       tag=self.full_image_btn_id, width=200, enabled=False)
         dpg.add_text("Crop Parameters:")
         dpg.add_input_int(label="X", default_value=self.x,
                          callback=self.update_params, tag=self.x_id, width=185)
@@ -72,7 +96,16 @@ class Crop(Node):
         image = data.image_or_mask
         
         if image is None:
+            # Disable the Full Image button when no image is available
+            self.input_image_shape = None
+            if dpg.does_item_exist(self.full_image_btn_id):
+                dpg.configure_item(self.full_image_btn_id, enabled=False)
             return [NodePackage()]
+        
+        # Store image dimensions and enable the Full Image button
+        self.input_image_shape = image.shape
+        if dpg.does_item_exist(self.full_image_btn_id):
+            dpg.configure_item(self.full_image_btn_id, enabled=True)
             
         # Update aspect ratio based on input image
         if self.maintain_aspect:
